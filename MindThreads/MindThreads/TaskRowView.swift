@@ -52,7 +52,7 @@ struct TaskRowView: View {
                 .strikethrough(task.isComplete)
                 .foregroundColor(task.isComplete ? .secondary : .primary)
                 .font(.body)
-                .submitLabel(.next) // Use .next which implies moving to next task
+                .submitLabel(.done) // Use .done to close keyboard
                 .onSubmit(handleReturnKey)
                 .onChange(of: task.title) { _, _ in
                     try? modelContext.save()
@@ -123,8 +123,8 @@ struct TaskRowView: View {
     private func handleReturnKey() {
         task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Just create the new task - focus is handled by ContentView
-        onCreateTaskBelow?(task)
+        // Just dismiss the keyboard when Done is pressed
+        isFocused = false
         
         try? modelContext.save()
     }

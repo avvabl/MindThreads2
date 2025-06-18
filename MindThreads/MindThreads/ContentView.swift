@@ -81,6 +81,12 @@ struct ContentView: View {
                                 .listRowInsets(EdgeInsets())
                         }
                         .listStyle(PlainListStyle())
+                        .onScrollPhaseChange { oldPhase, newPhase in
+                            // Dismiss keyboard when user starts scrolling
+                            if newPhase == .interacting {
+                                focusedTaskID = nil
+                            }
+                        }
                         .onChange(of: autofocusID) { _, newTaskID in
                             if let taskID = newTaskID {
                                 // Defer to the next run loop to ensure the view is ready
