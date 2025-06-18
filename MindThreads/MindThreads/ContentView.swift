@@ -16,6 +16,9 @@ struct ContentView: View {
     // Focus state management
     @FocusState private var focusedTaskID: UUID?
     
+    // State for managing automatic focus of newly created rows
+    @State private var autofocusID: UUID?
+    
     // Computed property to check if keyboard is open
     private var isKeyboardOpen: Bool {
         focusedTaskID != nil
@@ -55,20 +58,41 @@ struct ContentView: View {
                     }
                 } else {
                     // Task list
-                    List {
-                        ForEach(mainListTasks) { task in
-                            TaskRowView(
-                                task: task,
-                                focusedTaskID: $focusedTaskID,
-                                onDelete: deleteSpecificTask,
-                                onCreateTaskBelow: createTaskBelow
-                            )
-                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                            .listRowSeparator(.hidden)
+                    ScrollViewReader { proxy in
+                        List {
+                            ForEach(mainListTasks) { task in
+                                TaskRowView(
+                                    task: task,
+                                    focusedTaskID: $focusedTaskID,
+                                    autofocusID: $autofocusID,
+                                    onDelete: deleteSpecificTask,
+                                    onCreateTaskBelow: createTaskBelow
+                                )
+                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                .listRowSeparator(.hidden)
+                                .id(task.id) // Important: give each row an ID for scrolling
+                            }
+                            .onDelete(perform: deleteTask)
+                            
+                            // Add bottom spacing so focused tasks appear above floating button
+                            Color.clear
+                                .frame(height: 100)
+                                .listRowSeparator(.hidden)
+                                .listRowInsets(EdgeInsets())
                         }
-                        .onDelete(perform: deleteTask)
+                        .listStyle(PlainListStyle())
+                        .onChange(of: autofocusID) { _, newTaskID in
+                            if let taskID = newTaskID {
+                                // Defer to the next run loop to ensure the view is ready
+                                DispatchQueue.main.async {
+                                    // Scroll to the new task with animation
+                                    withAnimation(.easeInOut(duration: 0.3)) {
+                                        proxy.scrollTo(taskID, anchor: .bottom)
+                                    }
+                                }
+                            }
+                        }
                     }
-                    .listStyle(PlainListStyle())
                 }
                 
                 // List indicator at bottom
@@ -140,20 +164,16 @@ struct ContentView: View {
         
         do {
             try modelContext.save()
-            
-            // Give SwiftUI more time to render before focusing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                focusedTaskID = newTask.id
-            }
-            
+            // Use the pending mechanism to handle focus and scroll
+            autofocusID = newTask.id
         } catch {
             print("Error saving new task: \(error)")
         }
     }
     
     // Task 2.5.5: Create task below current task
-    private func createTaskBelow(_ currentTask: Task) {
-        guard let currentList = currentTask.list else { return }
+    private func createTaskBelow(_ currentTask: Task) -> UUID? {
+        guard let currentList = currentTask.list else { return nil }
         
         let newTask = Task(
             title: "",
@@ -167,13 +187,13 @@ struct ContentView: View {
         do {
             try modelContext.save()
             
-            // Give SwiftUI more time to render before focusing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                focusedTaskID = newTask.id
-            }
+            // Mark for autofocus
+            autofocusID = newTask.id
             
+            return newTask.id
         } catch {
             print("Error creating task below: \(error)")
+            return nil
         }
     }
     
@@ -218,6 +238,28 @@ struct ContentView: View {
         
         // Delete the task itself
         modelContext.delete(task)
+    }
+}
+
+struct TaskRowView: View {
+    let task: Task
+    let focusedTaskID: Binding<UUID?>
+    let autofocusID: Binding<UUID?>
+    let onDelete: (Task) -> Void
+    let onCreateTaskBelow: (Task) -> UUID?
+
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        TextField("New Task", text: $task.title)
+            .focused($isFocused)
+            .onAppear {
+                if autofocusID.wrappedValue == task.id {
+                    // next run-loop: now the text field is definitely in the hierarchy
+                    DispatchQueue.main.async { isFocused = true }
+                    autofocusID.wrappedValue = nil      // consume the request
+                }
+            }
     }
 }
 

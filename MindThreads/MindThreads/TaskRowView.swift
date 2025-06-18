@@ -14,15 +14,15 @@ struct TaskRowView: View {
     
     // Binding for shared focus management from ContentView
     var focusedTaskID: FocusState<UUID?>.Binding
+    // Binding indicating which task should automatically grab focus when it appears
+    var autofocusID: Binding<UUID?>
     
     // Callbacks for actions
     var onDelete: ((Task) -> Void)?
-    var onCreateTaskBelow: ((Task) -> Void)?
+    var onCreateTaskBelow: ((Task) -> UUID?)?  // Return new task ID for focus
     
-    // Computed property to check if this task is focused
-    private var isFocused: Bool {
-        focusedTaskID.wrappedValue == task.id
-    }
+    // Local focus for this TextField
+    @FocusState private var isFocused: Bool
     
     // Safe indentation level
     private var safeIndentationLevel: Int {
@@ -46,22 +46,35 @@ struct TaskRowView: View {
             .accessibilityLabel(task.isComplete ? "Mark as incomplete" : "Mark as complete")
             
             // Title text field
-            TextField("New Task", text: $task.title, axis: .vertical)
+            TextField("New Task", text: $task.title)
                 .textFieldStyle(PlainTextFieldStyle())
-                .focused(focusedTaskID, equals: task.id) // Direct binding
+                .focused($isFocused) // Local focus
                 .strikethrough(task.isComplete)
                 .foregroundColor(task.isComplete ? .secondary : .primary)
                 .font(.body)
-                .lineLimit(1...3)
-                .submitLabel(.done) // Use "Done" which also triggers onSubmit
+                .submitLabel(.next) // Use .next which implies moving to next task
                 .onSubmit(handleReturnKey)
                 .onChange(of: task.title) { _, _ in
                     try? modelContext.save()
                 }
-                .onChange(of: isFocused) { _, isNowFocused in
-                    if !isNowFocused {
+                .onChange(of: isFocused) { _, nowFocused in
+                    if nowFocused {
+                        focusedTaskID.wrappedValue = task.id
+                    } else if focusedTaskID.wrappedValue == task.id {
+                        focusedTaskID.wrappedValue = nil
+                    }
+                    if !nowFocused {
                         task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
                         try? modelContext.save()
+                    }
+                }
+                .onAppear {
+                    // If this row is marked for autofocus, claim focus next run loop
+                    if autofocusID.wrappedValue == task.id {
+                        DispatchQueue.main.async {
+                            isFocused = true
+                            autofocusID.wrappedValue = nil
+                        }
                     }
                 }
             
@@ -75,7 +88,7 @@ struct TaskRowView: View {
         )
         .contentShape(Rectangle())
         .onTapGesture {
-            focusedTaskID.wrappedValue = task.id
+            isFocused = true
         }
         .contextMenu {
             contextMenuItems
@@ -110,7 +123,7 @@ struct TaskRowView: View {
     private func handleReturnKey() {
         task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Use callback to create a new task below
+        // Just create the new task - focus is handled by ContentView
         onCreateTaskBelow?(task)
         
         try? modelContext.save()
@@ -179,7 +192,8 @@ struct TaskRowView_Previews: PreviewProvider {
         var body: some View {
             TaskRowView(
                 task: sampleTask,
-                focusedTaskID: $focusedTaskID
+                focusedTaskID: $focusedTaskID,
+                autofocusID: .constant(nil)
             )
             .modelContainer(container)
             .padding()
