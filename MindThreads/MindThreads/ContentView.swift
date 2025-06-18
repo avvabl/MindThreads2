@@ -130,7 +130,7 @@ struct ContentView: View {
         }
     }
     
-    // Task 2.2.3: Improved Task Creation Logic with reliable focus
+    // Task 2.2.3: Fixed Task Creation Logic with proper focus timing
     private func addNewTask() {
         guard let currentList = taskLists.first(where: { $0.name == "Main" }) else {
             return
@@ -138,13 +138,17 @@ struct ContentView: View {
         
         let newTask = Task(title: "")
         newTask.list = currentList
+        newTask.indentationLevel = 0 // Ensure valid indentation level
+        
         modelContext.insert(newTask)
         
         do {
             try modelContext.save()
             
-            // Immediate focus setting - no async delay needed
-            focusedTaskID = newTask.id
+            // Give SwiftUI time to render the new TaskRowView before focusing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                focusedTaskID = newTask.id
+            }
             
         } catch {
             print("Error saving new task: \(error)")
@@ -157,7 +161,7 @@ struct ContentView: View {
         
         let newTask = Task(
             title: "",
-            indentationLevel: currentTask.indentationLevel
+            indentationLevel: max(0, currentTask.indentationLevel) // Ensure valid indentation
         )
         newTask.list = currentList
         newTask.parentTask = currentTask.parentTask
@@ -167,8 +171,10 @@ struct ContentView: View {
         do {
             try modelContext.save()
             
-            // Immediate focus on the new task
-            focusedTaskID = newTask.id
+            // Give SwiftUI time to render the new TaskRowView before focusing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                focusedTaskID = newTask.id
+            }
             
         } catch {
             print("Error creating task below: \(error)")

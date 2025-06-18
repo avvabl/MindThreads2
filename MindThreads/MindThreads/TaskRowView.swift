@@ -22,10 +22,15 @@ struct TaskRowView: View {
     // Optional callback for creating new task below
     var onCreateTaskBelow: ((Task) -> Void)?
     
+    // Safe indentation level to prevent NaN errors
+    private var safeIndentationLevel: Int {
+        return max(0, min(5, task.indentationLevel)) // Clamp between 0 and 5
+    }
+    
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            // Indentation spacing for hierarchy
-            ForEach(0..<task.indentationLevel, id: \.self) { _ in
+            // Indentation spacing for hierarchy - using safe value
+            ForEach(0..<safeIndentationLevel, id: \.self) { _ in
                 Spacer()
                     .frame(width: 20)
             }
@@ -54,9 +59,6 @@ struct TaskRowView: View {
                 .onChange(of: task.title) { _, newValue in
                     // Auto-save changes
                     try? modelContext.save()
-                    
-                    // If user clears the text completely, we might want to delete the task
-                    // But we'll be forgiving and just leave empty tasks for now
                 }
                 .onChange(of: isTextFieldFocused) { _, isFocused in
                     // Update shared focus state
@@ -75,7 +77,10 @@ struct TaskRowView: View {
                 .onChange(of: focusedTaskID?.wrappedValue) { _, focusedID in
                     // Update local focus state based on shared state
                     if focusedID == task.id && !isTextFieldFocused {
-                        isTextFieldFocused = true
+                        // Use async to ensure UI is ready
+                        DispatchQueue.main.async {
+                            isTextFieldFocused = true
+                        }
                     } else if focusedID != task.id && isTextFieldFocused {
                         isTextFieldFocused = false
                     }
@@ -177,7 +182,7 @@ struct TaskRowView: View {
         let duplicatedTask = Task(
             title: task.title,
             isComplete: false, // Reset completion status
-            indentationLevel: task.indentationLevel
+            indentationLevel: safeIndentationLevel // Use safe indentation level
         )
         duplicatedTask.list = task.list
         duplicatedTask.parentTask = task.parentTask
@@ -185,8 +190,8 @@ struct TaskRowView: View {
         modelContext.insert(duplicatedTask)
         try? modelContext.save()
         
-        // Focus on the duplicated task
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+        // Focus on the duplicated task with proper timing
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             focusedTaskID?.wrappedValue = duplicatedTask.id
         }
     }
