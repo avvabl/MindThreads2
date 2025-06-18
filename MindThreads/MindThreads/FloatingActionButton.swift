@@ -10,13 +10,6 @@ import SwiftUI
 struct FloatingActionButton: View {
     let icon: String
     let action: () -> Void
-    let backgroundColor: Color
-    
-    init(icon: String, backgroundColor: Color = .blue, action: @escaping () -> Void) {
-        self.icon = icon
-        self.backgroundColor = backgroundColor
-        self.action = action
-    }
     
     var body: some View {
         Button(action: action) {
@@ -25,19 +18,18 @@ struct FloatingActionButton: View {
                 .fontWeight(.medium)
                 .foregroundColor(.white)
                 .frame(width: 56, height: 56)
-                .background(
-                    Circle()
-                        .fill(backgroundColor)
-                        .shadow(color: .black.opacity(0.25), radius: 4, x: 0, y: 2)
-                )
+                .background(Color.blue)
+                .clipShape(Circle())
+                .shadow(color: .black.opacity(0.2), radius: 4, x: 0, y: 2)
+                .scaleEffect(1.0)
+                .animation(.easeInOut(duration: 0.2), value: icon) // Smooth icon transition
         }
-        .buttonStyle(FloatingButtonStyle())
-        .accessibilityLabel("Add new task")
+        .buttonStyle(PressedButtonStyle())
     }
 }
 
-// Custom button style for floating action button
-struct FloatingButtonStyle: ButtonStyle {
+// Custom button style for press animation
+struct PressedButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? 0.95 : 1.0)
@@ -46,15 +38,14 @@ struct FloatingButtonStyle: ButtonStyle {
 }
 
 #Preview {
-    VStack {
-        Spacer()
-        HStack {
-            Spacer()
-            FloatingActionButton(icon: "plus") {
-                print("Add button tapped")
-            }
-            .padding()
+    VStack(spacing: 20) {
+        FloatingActionButton(icon: "plus") {
+            print("Plus tapped")
+        }
+        
+        FloatingActionButton(icon: "chevron.down") {
+            print("Chevron tapped")
         }
     }
-    .background(Color.gray.opacity(0.1))
+    .padding()
 } 

@@ -16,6 +16,11 @@ struct ContentView: View {
     // Focus state management
     @FocusState private var focusedTaskID: UUID?
     
+    // Computed property to check if keyboard is open
+    private var isKeyboardOpen: Bool {
+        focusedTaskID != nil
+    }
+    
     // Filter tasks for the current main list
     private var mainListTasks: [Task] {
         guard let mainList = taskLists.first(where: { $0.name == "Main" }) else {
@@ -89,14 +94,23 @@ struct ContentView: View {
                     }
             )
             
-            // Floating action button
+            // Smart floating action button
             VStack {
                 Spacer()
                 HStack {
                     Spacer()
-                    FloatingActionButton(icon: "plus") {
-                        addNewTask()
-                    }
+                    FloatingActionButton(
+                        icon: isKeyboardOpen ? "chevron.down" : "plus",
+                        action: {
+                            if isKeyboardOpen {
+                                // Close keyboard
+                                focusedTaskID = nil
+                            } else {
+                                // Add new task
+                                addNewTask()
+                            }
+                        }
+                    )
                     .padding(.trailing, 20)
                     .padding(.bottom, 30)
                 }
@@ -116,7 +130,7 @@ struct ContentView: View {
         }
     }
     
-    // Task 2.2.3: Implement Task Creation Logic
+    // Task 2.2.3: Improved Task Creation Logic with reliable focus
     private func addNewTask() {
         guard let currentList = taskLists.first(where: { $0.name == "Main" }) else {
             return
@@ -128,10 +142,10 @@ struct ContentView: View {
         
         do {
             try modelContext.save()
-            // Focus on new task after a brief delay to ensure UI is updated
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                focusedTaskID = newTask.id
-            }
+            
+            // Immediate focus setting - no async delay needed
+            focusedTaskID = newTask.id
+            
         } catch {
             print("Error saving new task: \(error)")
         }
@@ -152,10 +166,10 @@ struct ContentView: View {
         
         do {
             try modelContext.save()
-            // Focus on the new task after a brief delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                focusedTaskID = newTask.id
-            }
+            
+            // Immediate focus on the new task
+            focusedTaskID = newTask.id
+            
         } catch {
             print("Error creating task below: \(error)")
         }

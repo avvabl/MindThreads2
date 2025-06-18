@@ -47,7 +47,7 @@ struct TaskRowView: View {
                 .foregroundColor(task.isComplete ? .secondary : .primary)
                 .font(.body)
                 .lineLimit(1...3) // Allow up to 3 lines
-                .submitLabel(.done) // Show "Done" on return key
+                .submitLabel(.next) // Show "Next" on return key
                 .onSubmit {
                     handleReturnKey()
                 }
@@ -129,22 +129,16 @@ struct TaskRowView: View {
         try? modelContext.save()
     }
     
-    // Task 2.5.4: Handle Return Key Behavior
+    // Task 2.5.4: Handle Return Key Behavior - Now creates new task below
     private func handleReturnKey() {
         // Trim the current task title
         task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // If the task has content, create a new task below
-        if !task.title.isEmpty {
-            if let onCreateTaskBelow = onCreateTaskBelow {
-                onCreateTaskBelow(task)
-            } else {
-                // Fallback: just dismiss keyboard
-                isTextFieldFocused = false
-                focusedTaskID?.wrappedValue = nil
-            }
+        // Always create a new task below when return is pressed
+        if let onCreateTaskBelow = onCreateTaskBelow {
+            onCreateTaskBelow(task)
         } else {
-            // If empty task, just dismiss keyboard
+            // Fallback: just dismiss keyboard if no callback provided
             isTextFieldFocused = false
             focusedTaskID?.wrappedValue = nil
         }
