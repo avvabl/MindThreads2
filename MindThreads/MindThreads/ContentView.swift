@@ -10,7 +10,7 @@ import SwiftData
 
 struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query(sort: \Task.creationDate) private var tasks: [Task]
+    @Query(sort: \Task.creationDate, animation: .default) private var tasks: [Task]
     @Query(sort: \TaskList.name) private var taskLists: [TaskList]
     
     // Focus state management
@@ -56,16 +56,12 @@ struct ContentView: View {
                 } else {
                     // Task list
                     List {
-                        ForEach(mainListTasks, id: \.id) { task in
+                        ForEach(mainListTasks) { task in
                             TaskRowView(
                                 task: task,
                                 focusedTaskID: $focusedTaskID,
-                                onDelete: { taskToDelete in
-                                    deleteSpecificTask(taskToDelete)
-                                },
-                                onCreateTaskBelow: { currentTask in
-                                    createTaskBelow(currentTask)
-                                }
+                                onDelete: deleteSpecificTask,
+                                onCreateTaskBelow: createTaskBelow
                             )
                             .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
                             .listRowSeparator(.hidden)
@@ -138,15 +134,15 @@ struct ContentView: View {
         
         let newTask = Task(title: "")
         newTask.list = currentList
-        newTask.indentationLevel = 0 // Ensure valid indentation level
+        newTask.indentationLevel = 0
         
         modelContext.insert(newTask)
         
         do {
             try modelContext.save()
             
-            // Give SwiftUI time to render the new TaskRowView before focusing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            // Give SwiftUI more time to render before focusing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 focusedTaskID = newTask.id
             }
             
@@ -161,7 +157,7 @@ struct ContentView: View {
         
         let newTask = Task(
             title: "",
-            indentationLevel: max(0, currentTask.indentationLevel) // Ensure valid indentation
+            indentationLevel: max(0, currentTask.indentationLevel)
         )
         newTask.list = currentList
         newTask.parentTask = currentTask.parentTask
@@ -171,8 +167,8 @@ struct ContentView: View {
         do {
             try modelContext.save()
             
-            // Give SwiftUI time to render the new TaskRowView before focusing
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            // Give SwiftUI more time to render before focusing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                 focusedTaskID = newTask.id
             }
             

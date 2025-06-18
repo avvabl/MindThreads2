@@ -11,31 +11,32 @@ import SwiftData
 struct TaskRowView: View {
     @Bindable var task: Task
     @Environment(\.modelContext) private var modelContext
-    @FocusState private var isTextFieldFocused: Bool
     
-    // Binding for shared focus management
-    var focusedTaskID: FocusState<UUID?>.Binding?
+    // Binding for shared focus management from ContentView
+    var focusedTaskID: FocusState<UUID?>.Binding
     
-    // Optional deletion callback for context menu
+    // Callbacks for actions
     var onDelete: ((Task) -> Void)?
-    
-    // Optional callback for creating new task below
     var onCreateTaskBelow: ((Task) -> Void)?
     
-    // Safe indentation level to prevent NaN errors
+    // Computed property to check if this task is focused
+    private var isFocused: Bool {
+        focusedTaskID.wrappedValue == task.id
+    }
+    
+    // Safe indentation level
     private var safeIndentationLevel: Int {
-        return max(0, min(5, task.indentationLevel)) // Clamp between 0 and 5
+        max(0, min(5, task.indentationLevel))
     }
     
     var body: some View {
         HStack(alignment: .center, spacing: 12) {
-            // Indentation spacing for hierarchy - using safe value
+            // Indentation
             ForEach(0..<safeIndentationLevel, id: \.self) { _ in
-                Spacer()
-                    .frame(width: 20)
+                Spacer().frame(width: 20)
             }
             
-            // Checkbox button
+            // Checkbox
             Button(action: toggleCompletion) {
                 Image(systemName: task.isComplete ? "checkmark.circle.fill" : "circle")
                     .font(.title2)
@@ -47,42 +48,20 @@ struct TaskRowView: View {
             // Title text field
             TextField("New Task", text: $task.title, axis: .vertical)
                 .textFieldStyle(PlainTextFieldStyle())
-                .focused($isTextFieldFocused)
+                .focused(focusedTaskID, equals: task.id) // Direct binding
                 .strikethrough(task.isComplete)
                 .foregroundColor(task.isComplete ? .secondary : .primary)
                 .font(.body)
-                .lineLimit(1...3) // Allow up to 3 lines
-                .submitLabel(.next) // Show "Next" on return key
-                .onSubmit {
-                    handleReturnKey()
-                }
-                .onChange(of: task.title) { _, newValue in
-                    // Auto-save changes
+                .lineLimit(1...3)
+                .submitLabel(.done) // Use "Done" which also triggers onSubmit
+                .onSubmit(handleReturnKey)
+                .onChange(of: task.title) { _, _ in
                     try? modelContext.save()
                 }
-                .onChange(of: isTextFieldFocused) { _, isFocused in
-                    // Update shared focus state
-                    if isFocused {
-                        focusedTaskID?.wrappedValue = task.id
-                    } else if focusedTaskID?.wrappedValue == task.id {
-                        focusedTaskID?.wrappedValue = nil
-                    }
-                    
-                    // When losing focus, trim whitespace
-                    if !isFocused {
+                .onChange(of: isFocused) { _, isNowFocused in
+                    if !isNowFocused {
                         task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
                         try? modelContext.save()
-                    }
-                }
-                .onChange(of: focusedTaskID?.wrappedValue) { _, focusedID in
-                    // Update local focus state based on shared state
-                    if focusedID == task.id && !isTextFieldFocused {
-                        // Use async to ensure UI is ready
-                        DispatchQueue.main.async {
-                            isTextFieldFocused = true
-                        }
-                    } else if focusedID != task.id && isTextFieldFocused {
-                        isTextFieldFocused = false
                     }
                 }
             
@@ -91,39 +70,33 @@ struct TaskRowView: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 4)
         .background(
-            // Subtle highlight for focused state
             RoundedRectangle(cornerRadius: 6)
-                .fill(isTextFieldFocused ? Color.blue.opacity(0.1) : Color.clear)
+                .fill(isFocused ? Color.blue.opacity(0.1) : Color.clear)
         )
         .contentShape(Rectangle())
         .onTapGesture {
-            // Tap anywhere on the row to focus the text field
-            isTextFieldFocused = true
-            focusedTaskID?.wrappedValue = task.id
+            focusedTaskID.wrappedValue = task.id
         }
         .contextMenu {
-            // Task 2.4.2: Context Menu for Cross-Platform Deletion
-            Button(action: {
-                deleteTask()
-            }) {
-                Label("Delete Task", systemImage: "trash")
-            }
-            .foregroundColor(.red)
-            
-            Button(action: {
-                duplicateTask()
-            }) {
-                Label("Duplicate Task", systemImage: "doc.on.doc")
-            }
-            
-            Button(action: {
-                toggleCompletion()
-            }) {
-                Label(
-                    task.isComplete ? "Mark as Incomplete" : "Mark as Complete",
-                    systemImage: task.isComplete ? "circle" : "checkmark.circle"
-                )
-            }
+            contextMenuItems
+        }
+    }
+    
+    @ViewBuilder
+    private var contextMenuItems: some View {
+        Button(role: .destructive, action: deleteTask) {
+            Label("Delete Task", systemImage: "trash")
+        }
+        
+        Button(action: duplicateTask) {
+            Label("Duplicate Task", systemImage: "doc.on.doc")
+        }
+        
+        Button(action: toggleCompletion) {
+            Label(
+                task.isComplete ? "Mark as Incomplete" : "Mark as Complete",
+                systemImage: task.isComplete ? "circle" : "checkmark.circle"
+            )
         }
     }
     
@@ -134,65 +107,38 @@ struct TaskRowView: View {
         try? modelContext.save()
     }
     
-    // Task 2.5.4: Handle Return Key Behavior - Now creates new task below
     private func handleReturnKey() {
-        // Trim the current task title
         task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Always create a new task below when return is pressed
-        if let onCreateTaskBelow = onCreateTaskBelow {
-            onCreateTaskBelow(task)
-        } else {
-            // Fallback: just dismiss keyboard if no callback provided
-            isTextFieldFocused = false
-            focusedTaskID?.wrappedValue = nil
-        }
+        // Use callback to create a new task below
+        onCreateTaskBelow?(task)
         
         try? modelContext.save()
     }
     
-    // Task deletion with proper cleanup
     private func deleteTask() {
-        // Clear focus if this task is focused
-        if focusedTaskID?.wrappedValue == task.id {
-            focusedTaskID?.wrappedValue = nil
-        }
-        
-        // Use callback if provided, otherwise delete directly
-        if let onDelete = onDelete {
-            onDelete(task)
-        } else {
-            // Fallback: delete directly (with subtasks)
-            deleteTaskAndSubtasks(task)
-            try? modelContext.save()
-        }
+        onDelete?(task)
     }
     
-    // Helper function for hierarchical deletion
-    private func deleteTaskAndSubtasks(_ task: Task) {
-        let subtasks = task.subtasks ?? []
-        for subtask in subtasks {
-            deleteTaskAndSubtasks(subtask)
-        }
-        modelContext.delete(task)
-    }
-    
-    // Duplicate task functionality
     private func duplicateTask() {
         let duplicatedTask = Task(
             title: task.title,
-            isComplete: false, // Reset completion status
-            indentationLevel: safeIndentationLevel // Use safe indentation level
+            isComplete: false,
+            indentationLevel: safeIndentationLevel
         )
         duplicatedTask.list = task.list
         duplicatedTask.parentTask = task.parentTask
         
         modelContext.insert(duplicatedTask)
-        try? modelContext.save()
         
-        // Focus on the duplicated task with proper timing
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            focusedTaskID?.wrappedValue = duplicatedTask.id
+        do {
+            try modelContext.save()
+            // Give SwiftUI a moment to render the new row before focusing
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                focusedTaskID.wrappedValue = duplicatedTask.id
+            }
+        } catch {
+            print("Error duplicating task: \(error)")
         }
     }
 }
@@ -210,14 +156,33 @@ extension View {
     }
 }
 
-#Preview {
-    let config = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try! ModelContainer(for: Task.self, TaskList.self, configurations: config)
+struct TaskRowView_Previews: PreviewProvider {
+    static var previews: some View {
+        TaskRowPreviewWrapper()
+    }
     
-    let sampleTask = Task(title: "Sample Task")
-    container.mainContext.insert(sampleTask)
-    
-    return TaskRowView(task: sampleTask)
-        .modelContainer(container)
-        .padding()
+    struct TaskRowPreviewWrapper: View {
+        @FocusState private var focusedTaskID: UUID?
+        private let sampleTask: Task
+        private let container: ModelContainer
+        
+        init() {
+            let config = ModelConfiguration(isStoredInMemoryOnly: true)
+            let container = try! ModelContainer(for: Task.self, TaskList.self, configurations: config)
+            let task = Task(title: "Sample Task")
+            container.mainContext.insert(task)
+            
+            self.container = container
+            self.sampleTask = task
+        }
+        
+        var body: some View {
+            TaskRowView(
+                task: sampleTask,
+                focusedTaskID: $focusedTaskID
+            )
+            .modelContainer(container)
+            .padding()
+        }
+    }
 } 
