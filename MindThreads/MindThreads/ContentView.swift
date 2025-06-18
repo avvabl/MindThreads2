@@ -241,28 +241,6 @@ struct ContentView: View {
     }
 }
 
-struct TaskRowView: View {
-    let task: Task
-    let focusedTaskID: Binding<UUID?>
-    let autofocusID: Binding<UUID?>
-    let onDelete: (Task) -> Void
-    let onCreateTaskBelow: (Task) -> UUID?
-
-    @FocusState private var isFocused: Bool
-
-    var body: some View {
-        TextField("New Task", text: $task.title)
-            .focused($isFocused)
-            .onAppear {
-                if autofocusID.wrappedValue == task.id {
-                    // next run-loop: now the text field is definitely in the hierarchy
-                    DispatchQueue.main.async { isFocused = true }
-                    autofocusID.wrappedValue = nil      // consume the request
-                }
-            }
-    }
-}
-
 #Preview {
     ContentView()
         .modelContainer(for: [Task.self, TaskList.self], inMemory: true)
