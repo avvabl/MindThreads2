@@ -33,114 +33,118 @@ struct ContentView: View {
     }
     
     var body: some View {
-        ZStack {
-            // Main content
-            VStack(spacing: 0) {
-                // Main content area
-                if mainListTasks.isEmpty {
-                    // Empty state
-                    VStack(spacing: 20) {
-                        Spacer()
-                        
-                        Image(systemName: "checkmark.circle")
-                            .font(.system(size: 60))
-                            .foregroundColor(.blue)
-                        
-                        Text("Ready to get organized?")
-                            .font(.title2)
-                            .fontWeight(.medium)
-                        
-                        Text("Tap + to add your first task!")
-                            .font(.body)
-                            .foregroundColor(.secondary)
-                        
-                        Spacer()
-                    }
-                } else {
-                    // Task list
-                    ScrollViewReader { proxy in
-                        List {
-                            ForEach(mainListTasks) { task in
-                                TaskRowView(
-                                    task: task,
-                                    focusedTaskID: $focusedTaskID,
-                                    autofocusID: $autofocusID,
-                                    onDelete: deleteSpecificTask,
-                                    onCreateTaskBelow: createTaskBelow
-                                )
-                                .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
-                                .listRowSeparator(.hidden)
-                                .id(task.id) // Important: give each row an ID for scrolling
-                            }
-                            .onDelete(perform: deleteTask)
+        NavigationView {
+            ZStack {
+                // Main content
+                VStack(spacing: 0) {
+                    // Main content area
+                    if mainListTasks.isEmpty {
+                        // Empty state
+                        VStack(spacing: 20) {
+                            Spacer()
                             
-                            // Add bottom spacing so focused tasks appear above floating button
-                            Color.clear
-                                .frame(height: 100)
-                                .listRowSeparator(.hidden)
-                                .listRowInsets(EdgeInsets())
+                            Image(systemName: "checkmark.circle")
+                                .font(.system(size: 60))
+                                .foregroundColor(.blue)
+                            
+                            Text("Ready to get organized?")
+                                .font(.title2)
+                                .fontWeight(.medium)
+                            
+                            Text("Tap + to add your first task!")
+                                .font(.body)
+                                .foregroundColor(.secondary)
+                            
+                            Spacer()
                         }
-                        .listStyle(PlainListStyle())
-                        .onScrollPhaseChange { oldPhase, newPhase in
-                            // Dismiss keyboard when user starts scrolling
-                            if newPhase == .interacting {
-                                focusedTaskID = nil
+                    } else {
+                        // Task list
+                        ScrollViewReader { proxy in
+                            List {
+                                ForEach(mainListTasks) { task in
+                                    TaskRowView(
+                                        task: task,
+                                        focusedTaskID: $focusedTaskID,
+                                        autofocusID: $autofocusID,
+                                        onDelete: deleteSpecificTask,
+                                        onCreateTaskBelow: createTaskBelow
+                                    )
+                                    .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                                    .listRowSeparator(.hidden)
+                                    .id(task.id) // Important: give each row an ID for scrolling
+                                }
+                                .onDelete(perform: deleteTask)
+                                
+                                // Add bottom spacing so focused tasks appear above floating button
+                                Color.clear
+                                    .frame(height: 100)
+                                    .listRowSeparator(.hidden)
+                                    .listRowInsets(EdgeInsets())
                             }
-                        }
-                        .onChange(of: autofocusID) { _, newTaskID in
-                            if let taskID = newTaskID {
-                                // Defer to the next run loop to ensure the view is ready
-                                DispatchQueue.main.async {
-                                    // Scroll to the new task with animation
-                                    withAnimation(.easeInOut(duration: 0.3)) {
-                                        proxy.scrollTo(taskID, anchor: .bottom)
+                            .listStyle(PlainListStyle())
+                            .onScrollPhaseChange { oldPhase, newPhase in
+                                // Dismiss keyboard when user starts scrolling
+                                if newPhase == .interacting {
+                                    focusedTaskID = nil
+                                }
+                            }
+                            .onChange(of: autofocusID) { _, newTaskID in
+                                if let taskID = newTaskID {
+                                    // Defer to the next run loop to ensure the view is ready
+                                    DispatchQueue.main.async {
+                                        // Scroll to the new task with animation
+                                        withAnimation(.easeInOut(duration: 0.3)) {
+                                            proxy.scrollTo(taskID, anchor: .bottom)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
-                
-                // List indicator at bottom
-                HStack {
-                    Spacer()
-                    Text("Adding to: Main")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Spacer()
-                }
-                .padding(.bottom, 80) // Space for floating button
-            }
-            .background(
-                // Tap outside to dismiss keyboard
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        focusedTaskID = nil
+                    
+                    // List indicator at bottom
+                    HStack {
+                        Spacer()
+                        Text("Adding to: Main")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
                     }
-            )
-            
-            // Smart floating action button
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    FloatingActionButton(
-                        icon: isKeyboardOpen ? "chevron.down" : "plus",
-                        action: {
-                            if isKeyboardOpen {
-                                // Close keyboard
-                                focusedTaskID = nil
-                            } else {
-                                // Add new task
-                                addNewTask()
-                            }
+                    .padding(.bottom, 80) // Space for floating button
+                }
+                .background(
+                    // Tap outside to dismiss keyboard
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            focusedTaskID = nil
                         }
-                    )
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 30)
+                )
+                
+                // Smart floating action button
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        FloatingActionButton(
+                            icon: isKeyboardOpen ? "chevron.down" : "plus",
+                            action: {
+                                if isKeyboardOpen {
+                                    // Close keyboard
+                                    focusedTaskID = nil
+                                } else {
+                                    // Add new task
+                                    addNewTask()
+                                }
+                            }
+                        )
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 30)
+                    }
                 }
             }
+            .navigationTitle("MindThreads")
+            .navigationBarTitleDisplayMode(.large)
         }
         .onAppear {
             createDefaultListIfNeeded()

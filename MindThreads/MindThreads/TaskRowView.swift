@@ -45,53 +45,84 @@ struct TaskRowView: View {
             .buttonStyle(PlainButtonStyle())
             .accessibilityLabel(task.isComplete ? "Mark as incomplete" : "Mark as complete")
             
-            // Title text field
-            TextField("New Task", text: $task.title)
-                .textFieldStyle(PlainTextFieldStyle())
-                .focused($isFocused) // Local focus
-                .strikethrough(task.isComplete)
-                .foregroundColor(task.isComplete ? .secondary : .primary)
-                .font(.body)
-                .submitLabel(.done) // Use .done to close keyboard
-                .onSubmit(handleReturnKey)
-                .onChange(of: task.title) { _, _ in
-                    try? modelContext.save()
-                }
-                .onChange(of: isFocused) { _, nowFocused in
-                    if nowFocused {
-                        focusedTaskID.wrappedValue = task.id
-                    } else if focusedTaskID.wrappedValue == task.id {
-                        focusedTaskID.wrappedValue = nil
-                    }
-                    if !nowFocused {
-                        task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
-                        try? modelContext.save()
-                    }
-                }
-                .onAppear {
-                    // If this row is marked for autofocus, claim focus next run loop
-                    if autofocusID.wrappedValue == task.id {
-                        DispatchQueue.main.async {
-                            isFocused = true
-                            autofocusID.wrappedValue = nil
-                        }
-                    }
-                }
+            // Title text field - broken into smaller expressions
+            titleTextField
             
             Spacer()
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 4)
-        .background(
-            RoundedRectangle(cornerRadius: 6)
-                .fill(isFocused ? Color.blue.opacity(0.1) : Color.clear)
-        )
+        .background(backgroundView)
         .contentShape(Rectangle())
         .onTapGesture {
             isFocused = true
         }
         .contextMenu {
             contextMenuItems
+        }
+    }
+    
+    // Computed property for the text field to break up complexity
+    private var titleTextField: some View {
+        TextField("New Task", text: $task.title)
+            .textFieldStyle(PlainTextFieldStyle())
+            .focused($isFocused)
+            .strikethrough(task.isComplete)
+            .foregroundColor(task.isComplete ? .secondary : .primary)
+            .font(.body)
+            .submitLabel(.done)
+            .onSubmit(handleReturnKey)
+            .onKeyPress(.delete) {
+                handleDeleteKey()
+            }
+            .onChange(of: task.title) { _, newValue in
+                handleTextChange(newValue)
+            }
+            .onChange(of: isFocused) { _, nowFocused in
+                handleFocusChange(nowFocused)
+            }
+            .onAppear {
+                handleAppear()
+            }
+    }
+    
+    // Computed property for background
+    private var backgroundView: some View {
+        RoundedRectangle(cornerRadius: 6)
+            .fill(isFocused ? Color.blue.opacity(0.1) : Color.clear)
+    }
+    
+    // Helper functions to break up the onChange closures
+    private func handleDeleteKey() -> KeyPress.Result {
+        if task.title.isEmpty {
+            handleBackspaceOnEmptyTask()
+            return .handled
+        }
+        return .ignored
+    }
+    
+    private func handleTextChange(_ newValue: String) {
+        try? modelContext.save()
+    }
+    
+    private func handleFocusChange(_ nowFocused: Bool) {
+        if nowFocused {
+            focusedTaskID.wrappedValue = task.id
+        } else if focusedTaskID.wrappedValue == task.id {
+            focusedTaskID.wrappedValue = nil
+        }
+        if !nowFocused {
+            task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
+            try? modelContext.save()
+        }
+    }
+    
+    private func handleAppear() {
+        if autofocusID.wrappedValue == task.id {
+            DispatchQueue.main.async {
+                isFocused = true
+                autofocusID.wrappedValue = nil
+            }
         }
     }
     
@@ -123,10 +154,17 @@ struct TaskRowView: View {
     private func handleReturnKey() {
         task.title = task.title.trimmingCharacters(in: .whitespacesAndNewlines)
         
-        // Just dismiss the keyboard when Done is pressed
-        isFocused = false
+        // Create a new task below instead of just dismissing keyboard
+        _ = onCreateTaskBelow?(task)
         
         try? modelContext.save()
+    }
+    
+    private func handleBackspaceOnEmptyTask() {
+        // Only delete if the task is empty
+        if task.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            onDelete?(task)
+        }
     }
     
     private func deleteTask() {
